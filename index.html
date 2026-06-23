@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShiftSync | Work Log Retrieval Portal</title>
+  <meta name="description" content="A premium work log search and retrieval system for tracking personnel shifts, work logs, and duties.">
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow-bg">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+  </div>
+
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="url(#logoGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 6V12L16 14" stroke="url(#logoGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="logoGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#3b82f6" />
+                <stop offset="1" stop-color="#8b5cf6" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <h1>ShiftSync</h1>
+          <p class="subtitle">Personnel & Work Log Retrieval Portal</p>
+        </div>
+      </div>
+      <div class="header-badge">
+        <span class="pulse-indicator"></span>
+        <span class="badge-text">Operational Database</span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Search Panel -->
+      <section class="search-section glass-panel">
+        <div class="search-wrapper">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Search personnel by name..." autocomplete="off" autofocus>
+          <button id="clearSearchBtn" class="clear-btn" aria-label="Clear search" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="search-quick-tags">
+          <span class="quick-tag-label">Quick Search:</span>
+          <div id="quickTagsContainer" class="quick-tags-list">
+            <!-- Dynamic quick tags will be inserted here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Stats Overview -->
+      <section class="stats-grid">
+        <div class="stat-card glass-panel" id="statTotalPersonnel">
+          <div class="stat-header">
+            <span class="stat-title">Personnel Count</span>
+            <div class="stat-icon icon-blue">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 11C11.2091 11 13 9.20914 13 7C13 4.79086 11.2091 3 9 3C6.79086 3 5 4.79086 5 7C5 9.20914 6.79086 11 9 11Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M23 21V19C22.9993 18.1137 22.6905 17.2518 22.122 16.5598C21.5535 15.8679 20.7574 15.385 19.86 15.19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M16 3.13C16.8999 3.32431 17.6978 3.80931 18.2662 4.5042C18.8346 5.19908 19.1415 6.06456 19.1415 6.955C19.1415 7.84544 18.8346 8.71092 18.2662 9.4058C17.6978 10.1007 16.8999 10.5857 16 10.78" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="valTotal">0</div>
+          <div class="stat-footer">Across multiple shifts</div>
+        </div>
+
+        <div class="stat-card glass-panel" id="statActiveShifts">
+          <div class="stat-header">
+            <span class="stat-title">Shifts Logged</span>
+            <div class="stat-icon icon-purple">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="valShifts">A, B, C</div>
+          <div class="stat-footer">Rotational tracking roster</div>
+        </div>
+
+        <div class="stat-card glass-panel" id="statSearchStatus">
+          <div class="stat-header">
+            <span class="stat-title">Active Database Search</span>
+            <div class="stat-icon icon-cyan">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.709 16.9033 20.9739 14.8355 21.5839C12.7677 22.1939 10.5632 22.1168 8.54299 21.3639C6.52279 20.611 4.8003 19.2239 3.63673 17.408C2.47317 15.5921 1.92813 13.4474 2.08345 11.2913C2.23877 9.13524 3.08575 7.08112 4.49842 5.43265C5.9111 3.78418 7.8098 2.63155 9.91484 2.14074C12.0199 1.64993 14.2177 1.8488 16.21 2.70999" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="valMatches">All</div>
+          <div class="stat-footer" id="valMatchesLabel">Showing all records</div>
+        </div>
+      </section>
+
+      <!-- Details Focus Panel (glorified view when 1 user is searched/selected) -->
+      <section class="detail-focus-section" id="detailFocusSection" style="display: none;">
+        <!-- Dynamic detail focus widget will be rendered here -->
+      </section>
+
+      <!-- Results Grid -->
+      <section class="results-section">
+        <h2 class="section-title" id="resultsTitle">All Roster Logs</h2>
+        <div class="log-grid" id="logGrid">
+          <!-- Dynamic cards will be rendered here -->
+        </div>
+
+        <!-- No Results Fallback -->
+        <div class="no-results-panel glass-panel" id="noResultsPanel" style="display: none;">
+          <div class="no-results-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 16H14M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 9H10.01M14 9H14.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3>No matching personnel found</h3>
+          <p>We couldn't find anyone named <strong id="searchedTerm"></strong> in the shift database. Please double check the spelling.</p>
+          <button id="resetSearchBtn" class="action-btn">Reset Search</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>&copy; 2026 ShiftSync Logistics. All rights reserved. Data verified on current cycle.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
