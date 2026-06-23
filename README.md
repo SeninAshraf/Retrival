@@ -1,4 +1,4 @@
-# ShiftSync | Personnel & Work Log Retrieval Portal (MERN Stack)
+# ShiftSync | Personnel & Work Log Retrieval Portal 
 
 ShiftSync is a premium, high-fidelity web dashboard designed to retrieve and display work logs of personnel working across multiple rotational shifts. Originally a static HTML/JS website, it has been fully migrated to a **MERN Stack** (MongoDB, Express, React, Node.js) application. 
 
