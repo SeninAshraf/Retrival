@@ -1,0 +1,17 @@
+{
+  "name": "shiftsync-mern",
+  "version": "1.0.0",
+  "description": "ShiftSync Personnel & Work Log Retrieval Portal - MERN Stack Conversion",
+  "main": "server/server.js",
+  "scripts": {
+    "postinstall": "npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "server": "npm start --prefix server",
+    "client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "build": "npm run build --prefix client"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

@@ -1,2 +1,20 @@
+# Dependency directories
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Production build artifacts
+client/dist/
+dist/
+
+# Local env configs and secrets
+.env
+server/.env
+client/.env
+
+# IDE and OS metadata files
 .DS_Store
+.vscode/
+.idea/
 .gemini/
+*.log
