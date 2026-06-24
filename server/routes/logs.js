@@ -91,8 +91,11 @@ router.post('/batch', protect, adminOnly, async (req, res) => {
     const insertedLogs = await ShiftLog.insertMany(logs);
     res.status(201).json({ success: true, count: insertedLogs.length, data: insertedLogs });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Server error during batch creation of shift logs' });
+    console.error('Batch creation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Server error during batch creation of shift logs: ${error.message}` 
+    });
   }
 });
 
