@@ -3,28 +3,52 @@ import Login from './components/Login';
 import AdminPortal from './components/AdminPortal';
 import EmployeePortal from './components/EmployeePortal';
 
+const safeGetItem = (key, defaultValue = null) => {
+  try {
+    return localStorage.getItem(key) || defaultValue;
+  } catch (error) {
+    return defaultValue;
+  }
+};
+
+const safeSetItem = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    // Fallback silently if storage is blocked
+  }
+};
+
+const safeRemoveItem = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    // Fallback silently
+  }
+};
+
 function App() {
-  const [role, setRole] = useState(localStorage.getItem('shiftsync_role') || null);
-  const [token, setToken] = useState(localStorage.getItem('shiftsync_token') || null);
-  const [empName, setEmpName] = useState(localStorage.getItem('shiftsync_emp_name') || '');
-  const [empId, setEmpId] = useState(localStorage.getItem('shiftsync_emp_id') || '');
+  const [role, setRole] = useState(safeGetItem('shiftsync_role', null));
+  const [token, setToken] = useState(safeGetItem('shiftsync_token', null));
+  const [empName, setEmpName] = useState(safeGetItem('shiftsync_emp_name', ''));
+  const [empId, setEmpId] = useState(safeGetItem('shiftsync_emp_id', ''));
 
   // Synchronize authentication tokens
   const handleLogin = (userRole, userToken, name, employeeId) => {
     setRole(userRole);
     setToken(userToken);
-    localStorage.setItem('shiftsync_role', userRole);
-    localStorage.setItem('shiftsync_token', userToken);
+    safeSetItem('shiftsync_role', userRole);
+    safeSetItem('shiftsync_token', userToken);
     if (userRole === 'employee') {
       setEmpName(name || '');
       setEmpId(employeeId || '');
-      localStorage.setItem('shiftsync_emp_name', name || '');
-      localStorage.setItem('shiftsync_emp_id', employeeId || '');
+      safeSetItem('shiftsync_emp_name', name || '');
+      safeSetItem('shiftsync_emp_id', employeeId || '');
     } else {
       setEmpName('');
       setEmpId('');
-      localStorage.removeItem('shiftsync_emp_name');
-      localStorage.removeItem('shiftsync_emp_id');
+      safeRemoveItem('shiftsync_emp_name');
+      safeRemoveItem('shiftsync_emp_id');
     }
   };
 
@@ -33,10 +57,10 @@ function App() {
     setToken(null);
     setEmpName('');
     setEmpId('');
-    localStorage.removeItem('shiftsync_role');
-    localStorage.removeItem('shiftsync_token');
-    localStorage.removeItem('shiftsync_emp_name');
-    localStorage.removeItem('shiftsync_emp_id');
+    safeRemoveItem('shiftsync_role');
+    safeRemoveItem('shiftsync_token');
+    safeRemoveItem('shiftsync_emp_name');
+    safeRemoveItem('shiftsync_emp_id');
   };
 
   // Determine portal sub-titles and styles dynamically based on authorization role

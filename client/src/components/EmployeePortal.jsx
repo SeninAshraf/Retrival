@@ -92,7 +92,7 @@ function EmployeePortal({ token, empId }) {
       const data = await res.json();
       if (data.success) {
         const filtered = data.data.filter(log => 
-          String(log.id).trim().toLowerCase() === String(empId).trim().toLowerCase()
+          log.id && empId && String(log.id).trim().toLowerCase() === String(empId).trim().toLowerCase()
         );
         setRosterLogs(filtered);
       }
@@ -446,14 +446,14 @@ function EmployeePortal({ token, empId }) {
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No logged shift roster records found.</p>
                 ) : (
                   rosterLogs.slice(0, 3).map(log => {
-                    const shiftClass = log.shift.toLowerCase();
+                    const shiftClass = (log.shift || 'A').toLowerCase();
                     return (
                       <div key={log._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.01)', border: '1px solid var(--glass-border)', borderRadius: '8px' }}>
                         <div>
                           <p style={{ margin: 0, fontWeight: '700', fontSize: '0.85rem' }}>{formatDate(log.date)}</p>
-                          <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{log.work_description.slice(0, 45)}...</p>
+                          <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(log.work_description || '').slice(0, 45)}...</p>
                         </div>
-                        <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift}</span>
+                        <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift || 'A'}</span>
                       </div>
                     );
                   })
@@ -477,21 +477,21 @@ function EmployeePortal({ token, empId }) {
               <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '3rem' }}>No shift logs registered under your employee profile.</p>
             ) : (
               rosterLogs.map(log => {
-                const shiftClass = log.shift.toLowerCase();
+                const shiftClass = (log.shift || 'A').toLowerCase();
                 return (
                   <div key={log._id} style={{ display: 'flex', gap: '1.5rem', padding: '1.25rem', background: 'rgba(0,0,0,0.01)', border: '1px solid var(--glass-border)', borderRadius: '12px' }}>
                     <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <span style={{ fontSize: '1.75rem', fontWeight: '800' }}>
-                        {new Date(log.date).getDate()}
+                        {log.date ? new Date(log.date).getDate() : ''}
                       </span>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                        {new Date(log.date).toLocaleDateString('en-US', { month: 'short' })}
+                        {log.date ? new Date(log.date).toLocaleDateString('en-US', { month: 'short' }) : ''}
                       </span>
                     </div>
                     
                     <div style={{ flexGrow: 1, borderLeft: '1px solid var(--glass-border)', paddingLeft: '1.5rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift}</span>
+                        <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift || 'A'}</span>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {log.id}</span>
                       </div>
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>{log.work_description}</p>

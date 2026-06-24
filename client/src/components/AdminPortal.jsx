@@ -118,10 +118,10 @@ function AdminPortal({ token }) {
     } else {
       const lowerQuery = searchQuery.toLowerCase().trim();
       const filtered = allLogs.filter(log => 
-        log.name.toLowerCase().includes(lowerQuery) ||
-        log.id.toLowerCase().includes(lowerQuery) ||
-        log.work_description.toLowerCase().includes(lowerQuery) ||
-        log.shift.toLowerCase().includes(lowerQuery)
+        (log.name || '').toLowerCase().includes(lowerQuery) ||
+        (log.id || '').toLowerCase().includes(lowerQuery) ||
+        (log.work_description || '').toLowerCase().includes(lowerQuery) ||
+        (log.shift || '').toLowerCase().includes(lowerQuery)
       );
       setFilteredLogs(filtered);
     }
@@ -243,7 +243,7 @@ function AdminPortal({ token }) {
     
     // Compute Attendance Summary from client-side logs
     const empLogs = allLogs.filter(log => 
-      String(log.id).trim().toLowerCase() === String(emp.employeeId).trim().toLowerCase()
+      log.id && emp.employeeId && String(log.id).trim().toLowerCase() === String(emp.employeeId).trim().toLowerCase()
     );
     setEmployeeAttendanceCount({
       total: empLogs.length,
@@ -465,9 +465,9 @@ function AdminPortal({ token }) {
 
   // Filter Employees List
   const filteredEmployees = employees.filter(emp => {
-    const matchSearch = emp.fullName.toLowerCase().includes(searchEmployeeQuery.toLowerCase()) ||
-                        emp.employeeId.toLowerCase().includes(searchEmployeeQuery.toLowerCase()) ||
-                        emp.designation.toLowerCase().includes(searchEmployeeQuery.toLowerCase());
+    const matchSearch = (emp.fullName || '').toLowerCase().includes(searchEmployeeQuery.toLowerCase()) ||
+                        (emp.employeeId || '').toLowerCase().includes(searchEmployeeQuery.toLowerCase()) ||
+                        (emp.designation || '').toLowerCase().includes(searchEmployeeQuery.toLowerCase());
     const matchDept = filterDept ? emp.department === filterDept : true;
     const matchStatus = filterStatus ? emp.status === filterStatus : true;
     return matchSearch && matchDept && matchStatus;
@@ -695,6 +695,14 @@ function AdminPortal({ token }) {
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
   };
+
+  // Stats derivations
+  const totalCount = allLogs.length;
+  const loggedShifts = [...new Set(allLogs.filter(item => item.shift).map(item => item.shift))].sort().join(', ') || 'None';
+  const matchCountLabel = searchQuery.trim() ? filteredLogs.length : 'All';
+  const matchFooterLabel = searchQuery.trim() 
+    ? `Matches for "${searchQuery}"`
+    : 'Showing all records';
 
   return (
     <div id="adminPortalArea">
@@ -942,14 +950,14 @@ function AdminPortal({ token }) {
                 <span className="close-focus-btn" onClick={handleResetSearch}>&times;</span>
                 <span className="focus-badge">Selected Record</span>
                 <div className="focus-header">
-                  <div className={`focus-avatar avatar-${focusedLog.shift.toLowerCase()}`}>
-                    {focusedLog.name.charAt(0)}
+                  <div className={`focus-avatar avatar-${(focusedLog.shift || 'A').toLowerCase()}`}>
+                    {(focusedLog.name || 'E').charAt(0)}
                   </div>
                   <div>
                     <h3>{focusedLog.name}</h3>
                     <div className="focus-meta">
                       <span>Ref ID: <strong>{focusedLog.id}</strong></span>
-                      <span className={`shift-badge badge-${focusedLog.shift.toLowerCase()}`}>Shift {focusedLog.shift}</span>
+                      <span className={`shift-badge badge-${(focusedLog.shift || 'A').toLowerCase()}`}>Shift {focusedLog.shift || 'A'}</span>
                     </div>
                   </div>
                 </div>
@@ -1028,7 +1036,7 @@ function AdminPortal({ token }) {
                     </div>
                   ) : (
                     filteredLogs.map(log => {
-                      const shiftClass = log.shift.toLowerCase();
+                      const shiftClass = (log.shift || 'A').toLowerCase();
                       return (
                         <div 
                           key={log._id} 
@@ -1038,14 +1046,14 @@ function AdminPortal({ token }) {
                           <div className="card-top">
                             <div className="person-identity">
                               <div className={`avatar avatar-${shiftClass}`}>
-                                {log.name.charAt(0)}
+                                {(log.name || 'E').charAt(0)}
                               </div>
                               <div>
                                 <div className="person-name">{log.name}</div>
                                 <div className="person-id">{log.id}</div>
                               </div>
                             </div>
-                            <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift}</span>
+                            <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift || 'A'}</span>
                           </div>
                           <div className="card-middle">
                             <div className="log-date">
@@ -1178,14 +1186,14 @@ function AdminPortal({ token }) {
                         <td>{emp.designation}</td>
                         <td>{formatCurrency(emp.monthlySalary)}</td>
                         <td>
-                          <span className={`status-pill ${emp.status.toLowerCase()}`} style={{
+                          <span className={`status-pill ${(emp.status || 'Active').toLowerCase()}`} style={{
                             padding: '0.25rem 0.5rem',
                             borderRadius: '4px',
                             fontSize: '0.75rem',
                             fontWeight: '600',
                             backgroundColor: emp.status === 'Active' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(225, 29, 72, 0.1)',
                             color: emp.status === 'Active' ? 'var(--accent-emerald)' : 'var(--accent-rose)'
-                          }}>{emp.status}</span>
+                          }}>{emp.status || 'Active'}</span>
                         </td>
                         <td>{new Date(emp.joiningDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}</td>
                       </tr>
