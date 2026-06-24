@@ -6,20 +6,37 @@ import EmployeePortal from './components/EmployeePortal';
 function App() {
   const [role, setRole] = useState(localStorage.getItem('shiftsync_role') || null);
   const [token, setToken] = useState(localStorage.getItem('shiftsync_token') || null);
+  const [empName, setEmpName] = useState(localStorage.getItem('shiftsync_emp_name') || '');
+  const [empId, setEmpId] = useState(localStorage.getItem('shiftsync_emp_id') || '');
 
   // Synchronize authentication tokens
-  const handleLogin = (userRole, userToken) => {
+  const handleLogin = (userRole, userToken, name, employeeId) => {
     setRole(userRole);
     setToken(userToken);
     localStorage.setItem('shiftsync_role', userRole);
     localStorage.setItem('shiftsync_token', userToken);
+    if (userRole === 'employee') {
+      setEmpName(name || '');
+      setEmpId(employeeId || '');
+      localStorage.setItem('shiftsync_emp_name', name || '');
+      localStorage.setItem('shiftsync_emp_id', employeeId || '');
+    } else {
+      setEmpName('');
+      setEmpId('');
+      localStorage.removeItem('shiftsync_emp_name');
+      localStorage.removeItem('shiftsync_emp_id');
+    }
   };
 
   const handleLogout = () => {
     setRole(null);
     setToken(null);
+    setEmpName('');
+    setEmpId('');
     localStorage.removeItem('shiftsync_role');
     localStorage.removeItem('shiftsync_token');
+    localStorage.removeItem('shiftsync_emp_name');
+    localStorage.removeItem('shiftsync_emp_id');
   };
 
   // Determine portal sub-titles and styles dynamically based on authorization role
@@ -81,7 +98,7 @@ function App() {
             {role === 'admin' ? (
               <AdminPortal token={token} />
             ) : (
-              <EmployeePortal token={token} />
+              <EmployeePortal token={token} empId={empId} />
             )}
           </main>
 

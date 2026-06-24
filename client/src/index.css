@@ -1275,3 +1275,81 @@ select.form-input option {
     gap: 0.5rem;
   }
 }
+
+/* HR Directory and Tab Navigation Styling */
+.nav-tab-btn:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  color: var(--text-primary) !important;
+}
+.nav-tab-btn.active:hover {
+  background: var(--grad-primary) !important;
+  color: #fff !important;
+}
+
+.clickable-row:hover {
+  background-color: rgba(124, 58, 237, 0.02) !important;
+}
+.active-row {
+  border-left: 3px solid var(--accent-purple);
+}
+
+/* Modals & Backdrops */
+.modal-backdrop {
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.modal-card {
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Chat Message Styling */
+.chat-threads-sidebar {
+  border-right: 1px solid var(--glass-border);
+}
+.threads-list::-webkit-scrollbar,
+.chat-messages-body::-webkit-scrollbar,
+.drawer-body::-webkit-scrollbar {
+  width: 6px;
+}
+.threads-list::-webkit-scrollbar-thumb,
+.chat-messages-body::-webkit-scrollbar-thumb,
+.drawer-body::-webkit-scrollbar-thumb {
+  background-color: var(--glass-border);
+  border-radius: 3px;
+}
+
+/* Printable PDF stylesheet styling */
+@media print {
+  body {
+    background-color: #fff !important;
+    color: #000 !important;
+  }
+  .glow-bg, .app-header, .dashboard-nav, .app-footer, .no-print, .modal-backdrop, .close-focus-btn {
+    display: none !important;
+  }
+  .modal-backdrop {
+    position: absolute !important;
+    background: none !important;
+    backdrop-filter: none !important;
+  }
+  .payslip-modal-container {
+    border: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    padding: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .printable-payslip {
+    visibility: visible !important;
+    width: 100% !important;
+  }
+}

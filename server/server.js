@@ -19,6 +19,10 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/logs', require('./routes/logs'));
+app.use('/api/employees', require('./routes/employees'));
+app.use('/api/salary', require('./routes/salary'));
+app.use('/api/announcements', require('./routes/announcements'));
+app.use('/api/chats', require('./routes/chats'));
 
 // Serve Frontend in Production
 if (process.env.NODE_ENV === 'production') {

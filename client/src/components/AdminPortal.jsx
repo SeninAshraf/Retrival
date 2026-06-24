@@ -1,20 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 
 function AdminPortal({ token }) {
-  // Database States
+  // Navigation
+  const [primaryTab, setPrimaryTab] = useState('roster'); // 'roster', 'employees', 'salary', 'announcements', 'chats'
+
+  // Roster / Database States
   const [allLogs, setAllLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
   const [quickTags, setQuickTags] = useState([]);
   const [focusedLog, setFocusedLog] = useState(null);
-
-  // Tab State
   const [activeTab, setActiveTab] = useState('manual'); // 'manual' or 'excel'
-
-  // Search States
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Manual Form States
+  // Roster Manual Form States
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formShift, setFormShift] = useState('A');
   const [formName, setFormName] = useState('');
@@ -22,131 +21,490 @@ function AdminPortal({ token }) {
   const [formDescription, setFormDescription] = useState('');
   const [showSuccessMsg, setShowSuccessMsg] = useState(false);
 
-  // Excel Import States
+  // Roster Excel Import States
   const [excelFile, setExcelFile] = useState(null);
   const [excelParsedData, setExcelParsedData] = useState([]);
   const [excelError, setExcelError] = useState('');
   const [excelSuccessMsg, setExcelSuccessMsg] = useState('');
   const [isImporting, setIsImporting] = useState(false);
 
-  // API Call Headers
+  // NEW: Employee Management States
+  const [employees, setEmployees] = useState([]);
+  const [searchEmployeeQuery, setSearchEmployeeQuery] = useState('');
+  const [filterDept, setFilterDept] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [showAddEmpModal, setShowAddEmpModal] = useState(false);
+  const [employeeAttendanceCount, setEmployeeAttendanceCount] = useState({ total: 0, A: 0, B: 0, C: 0 });
+  const [employeeSalaryHistory, setEmployeeSalaryHistory] = useState([]);
+
+  // Add Employee Form States
+  const [empFullName, setEmpFullName] = useState('');
+  const [empEmail, setEmpEmail] = useState('');
+  const [empMobileNumber, setEmpMobileNumber] = useState('');
+  const [empDepartment, setEmpDepartment] = useState('Engineering');
+  const [empDesignation, setEmpDesignation] = useState('Software Engineer');
+  const [empMonthlySalary, setEmpMonthlySalary] = useState('');
+  const [empPassword, setEmpPassword] = useState('');
+  const [empStatus, setEmpStatus] = useState('Active');
+  const [empJoiningDate, setEmpJoiningDate] = useState(new Date().toISOString().split('T')[0]);
+  const [empProfilePhoto, setEmpProfilePhoto] = useState('');
+  const [empCompanyNotes, setEmpCompanyNotes] = useState('');
+
+  // NEW: Salary Management States
+  const [salaryMonth, setSalaryMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [salaryReport, setSalaryReport] = useState({ totalPayroll: 0, totalPaid: 0, totalUnpaid: 0, departmentBreakdown: {}, records: [] });
+  
+  // Add Salary Form States
+  const [salEmployeeId, setSalEmployeeId] = useState('');
+  const [salMonth, setSalMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [salBase, setSalBase] = useState('');
+  const [salBonus, setSalBonus] = useState('0');
+  const [salDeductions, setSalDeductions] = useState('0');
+  const [salRemarks, setSalRemarks] = useState('');
+  const [salStatus, setSalStatus] = useState('Unpaid');
+
+  // NEW: Announcement States
+  const [announcements, setAnnouncements] = useState([]);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annContent, setAnnContent] = useState('');
+  const [annTarget, setAnnTarget] = useState('All');
+  const [annDept, setAnnDept] = useState('Engineering');
+
+  // NEW: Chat States
+  const [threads, setThreads] = useState([]);
+  const [activeThreadId, setActiveThreadId] = useState(null); // Employee DB _id
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInputText, setChatInputText] = useState('');
+  const chatEndRef = useRef(null);
+
+  // API headers helper
   const getHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`
   });
 
-  // Fetch all database metrics & items
+  // Load basic statistics on mount
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  // Fetch metrics and records for ShiftSync roster logs
   const fetchDashboardData = async () => {
     try {
-      // 1. Fetch all logs
       const resLogs = await fetch('/api/logs', { headers: getHeaders() });
       const dataLogs = await resLogs.json();
       if (dataLogs.success) {
         setAllLogs(dataLogs.data);
-        // If search is empty, filteredLogs is equal to allLogs
         if (!searchQuery.trim()) {
           setFilteredLogs(dataLogs.data);
         }
       }
 
-      // 2. Fetch unique names for quick tags
       const resNames = await fetch('/api/logs/names', { headers: getHeaders() });
       const dataNames = await resNames.json();
       if (dataNames.success) {
         setQuickTags(dataNames.data);
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error fetching roster data:', error);
     }
   };
 
-  // Run initial fetch
+  // Filter logs locally based on search query
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  // Fetch search results when query changes
-  useEffect(() => {
-    const handleSearch = async () => {
-      const trimmedQuery = searchQuery.trim();
-      if (!trimmedQuery) {
-        setFilteredLogs(allLogs);
-        setFocusedLog(null);
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/logs?search=${encodeURIComponent(trimmedQuery)}`, {
-          headers: getHeaders()
-        });
-        const data = await res.json();
-        if (data.success) {
-          const results = data.data;
-          setFilteredLogs(results);
-
-          // Focus logic:
-          if (results.length === 1) {
-            setFocusedLog(results[0]);
-          } else {
-            // Check if there is an exact name match in the filtered list
-            const exactMatch = results.find(
-              (p) => p.name.toLowerCase() === trimmedQuery.toLowerCase()
-            );
-            if (exactMatch) {
-              setFocusedLog(exactMatch);
-            } else {
-              setFocusedLog(null);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error searching logs:', error);
-      }
-    };
-
-    // Simple debounce/execution on search change
-    const delayDebounce = setTimeout(() => {
-      handleSearch();
-    }, 150);
-
-    return () => clearTimeout(delayDebounce);
+    if (searchQuery.trim() === '') {
+      setFilteredLogs(allLogs);
+    } else {
+      const lowerQuery = searchQuery.toLowerCase().trim();
+      const filtered = allLogs.filter(log => 
+        log.name.toLowerCase().includes(lowerQuery) ||
+        log.id.toLowerCase().includes(lowerQuery) ||
+        log.work_description.toLowerCase().includes(lowerQuery) ||
+        log.shift.toLowerCase().includes(lowerQuery)
+      );
+      setFilteredLogs(filtered);
+    }
   }, [searchQuery, allLogs]);
 
-  // Form submission handler (Manual)
-  const handleAddLogSubmit = async (e) => {
-    e.preventDefault();
+  // Tab switching side-effects (data loading)
+  useEffect(() => {
+    if (primaryTab === 'employees') {
+      fetchEmployees();
+    } else if (primaryTab === 'salary') {
+      fetchEmployees();
+      fetchSalaryReport();
+    } else if (primaryTab === 'announcements') {
+      fetchAnnouncements();
+    } else if (primaryTab === 'chats') {
+      fetchChatThreads();
+    }
+  }, [primaryTab, salaryMonth]);
 
-    const newLogData = {
-      date: formDate,
-      shift: formShift,
-      name: formName.trim(),
-      id: formId.trim(),
-      work_description: formDescription.trim()
-    };
+  // Fetch employees list
+  const fetchEmployees = async () => {
+    try {
+      const res = await fetch('/api/employees', { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setEmployees(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    }
+  };
+
+  // Fetch salary reports for a specific month
+  const fetchSalaryReport = async () => {
+    try {
+      const res = await fetch(`/api/salary/reports?month=${salaryMonth}`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setSalaryReport(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching salary report:', error);
+    }
+  };
+
+  // Fetch all announcements
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch('/api/announcements', { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setAnnouncements(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching announcements:', error);
+    }
+  };
+
+  // Fetch chat threads
+  const fetchChatThreads = async () => {
+    try {
+      const res = await fetch('/api/chats/threads', { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setThreads(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching threads:', error);
+    }
+  };
+
+  // Fetch chat messages in a thread
+  const fetchChatMessages = async (employeeId, showLoading = true) => {
+    try {
+      const res = await fetch(`/api/chats/thread/${employeeId}`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setChatMessages(data.data);
+        // Mark as read
+        await fetch('/api/chats/read', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ employeeId })
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  // Polling for chats to simulate real-time updates
+  useEffect(() => {
+    let interval;
+    if (primaryTab === 'chats') {
+      fetchChatThreads();
+      if (activeThreadId) {
+        fetchChatMessages(activeThreadId);
+      }
+      interval = setInterval(() => {
+        fetchChatThreads();
+        if (activeThreadId) {
+          fetchChatMessages(activeThreadId, false);
+        }
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [primaryTab, activeThreadId]);
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  // Handle single employee click
+  const handleEmployeeClick = async (emp) => {
+    setSelectedEmployee(emp);
+    
+    // Compute Attendance Summary from client-side logs
+    const empLogs = allLogs.filter(log => 
+      String(log.id).trim().toLowerCase() === String(emp.employeeId).trim().toLowerCase()
+    );
+    setEmployeeAttendanceCount({
+      total: empLogs.length,
+      A: empLogs.filter(l => l.shift === 'A').length,
+      B: empLogs.filter(l => l.shift === 'B').length,
+      C: empLogs.filter(l => l.shift === 'C').length,
+    });
+
+    // Fetch employee salary history
+    try {
+      const res = await fetch(`/api/salary/employee/${emp._id}`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setEmployeeSalaryHistory(data.data);
+      } else {
+        setEmployeeSalaryHistory([]);
+      }
+    } catch (err) {
+      console.error(err);
+      setEmployeeSalaryHistory([]);
+    }
+  };
+
+  // Create Employee Submit
+  const handleAddEmployeeSubmit = async (e) => {
+    e.preventDefault();
+    if (!empFullName || !empMobileNumber || !empMonthlySalary || !empPassword) {
+      alert('Please fill out all required fields.');
+      return;
+    }
 
     try {
-      const res = await fetch('/api/logs', {
+      const res = await fetch('/api/employees', {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify(newLogData)
+        body: JSON.stringify({
+          fullName: empFullName,
+          email: empEmail,
+          mobileNumber: empMobileNumber,
+          department: empDepartment,
+          designation: empDesignation,
+          monthlySalary: Number(empMonthlySalary),
+          password: empPassword,
+          status: empStatus,
+          joiningDate: empJoiningDate,
+          profilePhoto: empProfilePhoto,
+          companyNotes: empCompanyNotes
+        })
       });
       const data = await res.json();
-
       if (data.success) {
-        // Clear form fields
+        alert(`Account created successfully! Employee ID is: ${data.data.employeeId}`);
+        setShowAddEmpModal(false);
+        // Reset form
+        setEmpFullName('');
+        setEmpEmail('');
+        setEmpMobileNumber('');
+        setEmpMonthlySalary('');
+        setEmpPassword('');
+        setEmpProfilePhoto('');
+        setEmpCompanyNotes('');
+        setEmpStatus('Active');
+        setEmpJoiningDate(new Date().toISOString().split('T')[0]);
+        // Refresh
+        fetchEmployees();
+      } else {
+        alert(data.message || 'Failed to create employee account.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error creating account.');
+    }
+  };
+
+  // Convert profile image to base64
+  const handleProfilePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEmpProfilePhoto(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Record Salary Submit
+  const handleAddSalarySubmit = async (e) => {
+    e.preventDefault();
+    if (!salEmployeeId || !salMonth || !salBase) {
+      alert('Please fill out all required salary fields.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/salary', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          employee: salEmployeeId,
+          month: salMonth,
+          baseSalary: Number(salBase),
+          bonus: Number(salBonus) || 0,
+          deductions: Number(salDeductions) || 0,
+          paymentStatus: salStatus,
+          remarks: salRemarks
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Salary record logged successfully!');
+        setSalRemarks('');
+        setSalBonus('0');
+        setSalDeductions('0');
+        fetchSalaryReport();
+      } else {
+        alert(data.message || 'Failed to log salary record.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to server.');
+    }
+  };
+
+  // Mark Salary as Paid
+  const handleMarkSalaryPaid = async (recordId) => {
+    try {
+      const res = await fetch(`/api/salary/${recordId}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ paymentStatus: 'Paid' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchSalaryReport();
+      } else {
+        alert(data.message || 'Failed to update payment status.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Publish Announcement Submit
+  const handleAddAnnouncementSubmit = async (e) => {
+    e.preventDefault();
+    if (!annTitle || !annContent) {
+      alert('Please provide title and content.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          title: annTitle,
+          content: annContent,
+          target: annTarget,
+          department: annTarget === 'Department' ? annDept : undefined
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Announcement published!');
+        setAnnTitle('');
+        setAnnContent('');
+        fetchAnnouncements();
+      } else {
+        alert(data.message || 'Failed to post announcement.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Send Chat message
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInputText.trim() || !activeThreadId) return;
+
+    try {
+      const res = await fetch('/api/chats/message', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          employee: activeThreadId,
+          content: chatInputText.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChatInputText('');
+        fetchChatMessages(activeThreadId);
+        fetchChatThreads();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Update employee notes from Admin card
+  const handleUpdateNotes = async (notesText) => {
+    try {
+      const res = await fetch(`/api/employees/${selectedEmployee._id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ companyNotes: notesText })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedEmployee(prev => ({ ...prev, companyNotes: notesText }));
+        fetchEmployees();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Filter Employees List
+  const filteredEmployees = employees.filter(emp => {
+    const matchSearch = emp.fullName.toLowerCase().includes(searchEmployeeQuery.toLowerCase()) ||
+                        emp.employeeId.toLowerCase().includes(searchEmployeeQuery.toLowerCase()) ||
+                        emp.designation.toLowerCase().includes(searchEmployeeQuery.toLowerCase());
+    const matchDept = filterDept ? emp.department === filterDept : true;
+    const matchStatus = filterStatus ? emp.status === filterStatus : true;
+    return matchSearch && matchDept && matchStatus;
+  });
+
+  // Single shift logger submit
+  const handleAddLogSubmit = async (e) => {
+    e.preventDefault();
+    if (!formName || !formId || !formDescription) {
+      alert('Please fill in all manual shift fields.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/logs', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          date: formDate,
+          shift: formShift,
+          name: formName.trim(),
+          id: formId.trim(),
+          work_description: formDescription.trim()
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
         setFormName('');
         setFormId('');
         setFormDescription('');
         setFormDate(new Date().toISOString().split('T')[0]);
-
-        // Show success alert
         setShowSuccessMsg(true);
         setTimeout(() => setShowSuccessMsg(false), 3000);
-
-        // Reload data
         fetchDashboardData();
       } else {
-        alert(data.message || 'Failed to submit log entry.');
+        alert(data.message || 'Failed to submit log.');
       }
     } catch (error) {
       console.error('Error creating log entry:', error);
@@ -154,42 +512,33 @@ function AdminPortal({ token }) {
     }
   };
 
-  // Excel date parser utility
+  // Excel parsing utilities
   const parseExcelDate = (val) => {
     if (!val) return '';
     if (typeof val === 'number') {
-      // Excel serial date to YYYY-MM-DD
       const date = new Date(Math.round((val - 25569) * 86400 * 1000));
       return date.toISOString().split('T')[0];
     }
-    
     const strVal = String(val).trim();
-    
-    // Try parsing DD/MM/YYYY or DD-MM-YYYY
     const parts = strVal.split(/[-/]/);
     if (parts.length === 3) {
       if (parts[2].length === 4) {
-        // DD/MM/YYYY -> YYYY-MM-DD
         const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
         if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
       } else if (parts[0].length === 4) {
-        // YYYY/MM/DD -> YYYY-MM-DD
         const d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
         if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
       }
     }
-
     try {
       const d = new Date(strVal);
       if (!isNaN(d.getTime())) {
         return d.toISOString().split('T')[0];
       }
     } catch (e) {}
-
     return '';
   };
 
-  // Normalizes Excel Shift string values
   const normalizeShift = (val) => {
     if (!val) return '';
     const str = String(val).trim().toUpperCase();
@@ -200,7 +549,6 @@ function AdminPortal({ token }) {
     return str;
   };
 
-  // File processors
   const processExcelFile = (file) => {
     setExcelFile(file.name);
     setExcelParsedData([]);
@@ -221,8 +569,6 @@ function AdminPortal({ token }) {
         }
 
         const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
-
-        // Dynamic column index matching
         const dateIdx = headers.findIndex(h => h.includes('date'));
         const shiftIdx = headers.findIndex(h => h.includes('shift') || h.includes('rota') || h.includes('code'));
         const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('employee') || h.includes('worker') || h.includes('staff'));
@@ -230,7 +576,7 @@ function AdminPortal({ token }) {
         const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('work') || h.includes('task') || h.includes('duty') || h.includes('detail'));
 
         if (dateIdx === -1 || shiftIdx === -1 || nameIdx === -1 || idIdx === -1 || descIdx === -1) {
-          setExcelError('Unable to automatically map column headers. Make sure your sheet contains columns for Date, Shift, Name, ID, and Work Description.');
+          setExcelError('Unable to map column headers. File needs columns for Date, Shift, Name, ID, and Work Description.');
           return;
         }
 
@@ -273,7 +619,7 @@ function AdminPortal({ token }) {
         } else {
           setExcelParsedData(logs);
           if (errs.length > 0) {
-            setExcelError(`Parsed ${logs.length} rows successfully. Skipped ${errs.length} malformed rows:\n${errs.join('\n')}`);
+            setExcelError(`Parsed ${logs.length} rows. Skipped ${errs.length} malformed rows:\n${errs.join('\n')}`);
           }
         }
       } catch (err) {
@@ -324,12 +670,10 @@ function AdminPortal({ token }) {
     }
   };
 
-  // Click tag handler
   const handleTagClick = (name) => {
     setSearchQuery(name);
   };
 
-  // Card click handler (focus on single log and smooth scroll up)
   const handleCardClick = (log) => {
     setSearchQuery(log.name);
     setFocusedLog(log);
@@ -341,7 +685,6 @@ function AdminPortal({ token }) {
     setFocusedLog(null);
   };
 
-  // Date formatter
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -349,498 +692,1134 @@ function AdminPortal({ token }) {
     return date.toLocaleDateString('en-US', options);
   };
 
-  // Stats derivations
-  const totalCount = allLogs.length;
-  const loggedShifts = [...new Set(allLogs.map(item => item.shift))].sort().join(', ') || 'None';
-  const matchCountLabel = searchQuery.trim() ? filteredLogs.length : 'All';
-  const matchFooterLabel = searchQuery.trim() 
-    ? `Matches for "${searchQuery}"`
-    : 'Showing all records';
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  };
 
   return (
     <div id="adminPortalArea">
-      <div className="portal-grid">
-        
-        {/* Column 1: Add New Logs Form */}
-        <section className="form-column">
-          <div className="glass-panel form-card">
+      
+      {/* Primary Dashboard Navigation Tabs */}
+      <nav className="dashboard-nav glass-panel" style={{ 
+        display: 'flex', 
+        gap: '0.5rem', 
+        padding: '0.75rem 1.5rem', 
+        marginBottom: '2rem', 
+        borderRadius: '12px',
+        overflowX: 'auto'
+      }}>
+        {[
+          { id: 'roster', label: 'Roster Database', icon: '📅' },
+          { id: 'employees', label: 'Employee Directory', icon: '👥' },
+          { id: 'salary', label: 'Salary & Payroll', icon: '💰' },
+          { id: 'announcements', label: 'Bulletins', icon: '📢' },
+          { id: 'chats', label: 'Confidential Chats', icon: '💬' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`nav-tab-btn ${primaryTab === tab.id ? 'active' : ''}`}
+            onClick={() => setPrimaryTab(tab.id)}
+            style={{
+              padding: '0.65rem 1.25rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: primaryTab === tab.id ? 'var(--grad-primary)' : 'transparent',
+              color: primaryTab === tab.id ? '#fff' : 'var(--text-secondary)',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              whiteSpace: 'nowrap',
+              transition: 'all var(--transition-fast)'
+            }}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Roster Database Tab */}
+      {primaryTab === 'roster' && (
+        <div className="portal-grid">
+          {/* Column 1: Add New Logs Form */}
+          <section className="form-column">
+            <div className="glass-panel form-card">
+              <div className="tab-selector" style={{ 
+                display: 'flex', 
+                gap: '1rem', 
+                marginBottom: '1.5rem', 
+                borderBottom: '1px solid var(--glass-border)', 
+                paddingBottom: '0.75rem' 
+              }}>
+                <button 
+                  type="button"
+                  onClick={() => { setActiveTab('manual'); setExcelError(''); }} 
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    color: activeTab === 'manual' ? 'var(--accent-purple)' : 'var(--text-secondary)',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    borderBottom: activeTab === 'manual' ? '2px solid var(--accent-purple)' : 'none',
+                    paddingBottom: '0.45rem',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Manual Log
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setActiveTab('excel'); setShowSuccessMsg(false); }} 
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    color: activeTab === 'excel' ? 'var(--accent-purple)' : 'var(--text-secondary)',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    borderBottom: activeTab === 'excel' ? '2px solid var(--accent-purple)' : 'none',
+                    paddingBottom: '0.45rem',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Excel Import
+                </button>
+              </div>
+
+              {activeTab === 'manual' ? (
+                <>
+                  <h3 className="panel-title">
+                    <span style={{ marginRight: '0.5rem' }}>➕</span>
+                    Log New Shift Entry
+                  </h3>
+                  
+                  <form id="addLogForm" className="input-form" onSubmit={handleAddLogSubmit}>
+                    <div className="form-row-2">
+                      <div className="form-group">
+                        <label htmlFor="addDate">Date Logged</label>
+                        <input 
+                          type="date" 
+                          id="addDate" 
+                          className="form-input" 
+                          value={formDate}
+                          onChange={(e) => setFormDate(e.target.value)}
+                          required 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="addShift">Duty Shift</label>
+                        <select 
+                          id="addShift" 
+                          className="form-input"
+                          value={formShift}
+                          onChange={(e) => setFormShift(e.target.value)}
+                          required
+                        >
+                          <option value="A">Shift A (Morning)</option>
+                          <option value="B">Shift B (Evening)</option>
+                          <option value="C">Shift C (Night)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-row-2">
+                      <div className="form-group">
+                        <label htmlFor="addName">Employee Name</label>
+                        <input 
+                          type="text" 
+                          id="addName" 
+                          className="form-input" 
+                          placeholder="e.g. Senin Ashraf"
+                          value={formName}
+                          onChange={(e) => setFormName(e.target.value)}
+                          required 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="addId">Staff Reference ID</label>
+                        <input 
+                          type="text" 
+                          id="addId" 
+                          className="form-input" 
+                          placeholder="e.g. EMP-10001"
+                          value={formId}
+                          onChange={(e) => setFormId(e.target.value)}
+                          required 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="addDesc">Work Description & Duties</label>
+                      <textarea 
+                        id="addDesc" 
+                        rows="4" 
+                        className="form-input" 
+                        placeholder="Detail shift activities and tasks completed..."
+                        value={formDescription}
+                        onChange={(e) => setFormDescription(e.target.value)}
+                        required
+                      ></textarea>
+                    </div>
+
+                    <button type="submit" id="saveLogBtn" className="action-btn submit-btn">
+                      Publish Shift Log
+                    </button>
+                    
+                    {showSuccessMsg && (
+                      <span className="success-banner" id="formSuccessBanner">
+                        Shift log published and updated successfully!
+                      </span>
+                    )}
+                  </form>
+                </>
+              ) : (
+                <>
+                  <h3 className="panel-title">
+                    <span style={{ marginRight: '0.5rem' }}>📥</span>
+                    Batch Excel Upload
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+                    Upload a spreadsheet. Requires columns: <strong>Date, Shift/Rota, Name, ID, Work Description</strong>.
+                  </p>
+
+                  <div 
+                    className="excel-drop-zone"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                    onClick={() => document.getElementById('excelFileInput').click()}
+                  >
+                    <span>📁</span>
+                    <p>{excelFile ? `Selected: ${excelFile}` : 'Drag and drop roster file here, or click to browse'}</p>
+                    <input 
+                      type="file" 
+                      id="excelFileInput" 
+                      accept=".xlsx, .xls"
+                      onChange={handleExcelUpload} 
+                      style={{ display: 'none' }} 
+                    />
+                  </div>
+
+                  {excelError && (
+                    <div className="excel-error-box">
+                      <strong>Parsing Warnings:</strong>
+                      <p>{excelError}</p>
+                    </div>
+                  )}
+
+                  {excelParsedData.length > 0 && (
+                    <div className="excel-preview-box">
+                      <p>Parsed <strong>{excelParsedData.length}</strong> valid entries.</p>
+                      <button 
+                        type="button" 
+                        className="action-btn import-btn"
+                        onClick={handleExcelImportSubmit}
+                        disabled={isImporting}
+                      >
+                        {isImporting ? 'Importing logs...' : 'Confirm and Save Records'}
+                      </button>
+                    </div>
+                  )}
+
+                  {excelSuccessMsg && (
+                    <span className="success-banner">
+                      {excelSuccessMsg}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Column 2: Logs List and Retrieval Database */}
+          <section className="data-column">
             
-            {/* Tab Selectors */}
-            <div className="tab-selector" style={{ 
-              display: 'flex', 
-              gap: '1rem', 
-              marginBottom: '1.5rem', 
-              borderBottom: '1px solid var(--glass-border)', 
-              paddingBottom: '0.75rem' 
-            }}>
+            {/* Focused Log Preview Drawer */}
+            {focusedLog && (
+              <div className="focused-log-card glass-panel" id="focusedLogContainer" style={{ display: 'flex' }}>
+                <span className="close-focus-btn" onClick={handleResetSearch}>&times;</span>
+                <span className="focus-badge">Selected Record</span>
+                <div className="focus-header">
+                  <div className={`focus-avatar avatar-${focusedLog.shift.toLowerCase()}`}>
+                    {focusedLog.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3>{focusedLog.name}</h3>
+                    <div className="focus-meta">
+                      <span>Ref ID: <strong>{focusedLog.id}</strong></span>
+                      <span className={`shift-badge badge-${focusedLog.shift.toLowerCase()}`}>Shift {focusedLog.shift}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="focus-details">
+                  <div className="detail-item">
+                    <span className="lbl">Logged On</span>
+                    <span className="val">{formatDate(focusedLog.date)}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="lbl">Roster Description</span>
+                    <span className="val">{focusedLog.work_description}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Metrics Ribbon */}
+            <div className="metrics-ribbon">
+              <div className="metric-box glass-panel">
+                <span className="lbl">Total Shift Logs</span>
+                <span className="val" id="metricTotalLogs">{totalCount}</span>
+              </div>
+              <div className="metric-box glass-panel">
+                <span className="lbl">Active Shifts</span>
+                <span className="val" id="metricActiveShifts">{loggedShifts}</span>
+              </div>
+              <div className="metric-box glass-panel">
+                <span className="lbl">Filtered Results</span>
+                <span className="val" id="metricFilterCount">{matchCountLabel}</span>
+              </div>
+            </div>
+
+            {/* Roster Search Database Section */}
+            <div className="glass-panel logs-list-card">
+              <div className="list-card-header">
+                <h3>Roster Database Logs</h3>
+                <div className="search-bar">
+                  <input 
+                    type="text" 
+                    id="dbSearchInput" 
+                    placeholder="Search logs by staff name, ID or shift..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && <button onClick={handleResetSearch}>Clear</button>}
+                </div>
+              </div>
+
+              {/* Quick Tags List */}
+              <div className="quick-tags-section">
+                <span>Filter by Employee:</span>
+                <div id="quickTagsList" className="quick-tags-container">
+                  {quickTags.map(name => (
+                    <button 
+                      key={name} 
+                      type="button" 
+                      className={`tag-btn ${searchQuery === name ? 'active' : ''}`}
+                      onClick={() => handleTagClick(name)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Roster Data List */}
+              <div className="results-section">
+                <div className="section-title">
+                  <span id="matchFooter">{matchFooterLabel}</span>
+                </div>
+
+                <div id="logsGrid" className="log-grid">
+                  {filteredLogs.length === 0 ? (
+                    <div className="no-results-panel">
+                      <p>No matching shift logs found in the database.</p>
+                    </div>
+                  ) : (
+                    filteredLogs.map(log => {
+                      const shiftClass = log.shift.toLowerCase();
+                      return (
+                        <div 
+                          key={log._id} 
+                          className={`person-card glass-panel ${focusedLog && focusedLog._id === log._id ? 'active-match' : ''}`}
+                          onClick={() => handleCardClick(log)}
+                        >
+                          <div className="card-top">
+                            <div className="person-identity">
+                              <div className={`avatar avatar-${shiftClass}`}>
+                                {log.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="person-name">{log.name}</div>
+                                <div className="person-id">{log.id}</div>
+                              </div>
+                            </div>
+                            <span className={`shift-badge badge-${shiftClass}`}>Shift {log.shift}</span>
+                          </div>
+                          <div className="card-middle">
+                            <div className="log-date">
+                              <span>📅</span>
+                              {formatDate(log.date)}
+                            </div>
+                            <p className="work-desc">{log.work_description}</p>
+                          </div>
+                          <div className="card-footer">
+                            <span>View Record &rarr;</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Employee Directory Tab */}
+      {primaryTab === 'employees' && (
+        <div className="directory-tab-container" style={{ display: 'grid', gridTemplateColumns: selectedEmployee ? '1fr 400px' : '1fr', gap: '2rem' }}>
+          
+          <div className="employee-list-section glass-panel" style={{ padding: '1.5rem', borderRadius: '16px' }}>
+            <div className="header-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2>Employee Directory</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Manage company accounts, roles, and profiles</p>
+              </div>
               <button 
-                type="button"
-                onClick={() => { setActiveTab('manual'); setExcelError(''); }} 
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  color: activeTab === 'manual' ? 'var(--accent-purple)' : 'var(--text-secondary)',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  borderBottom: activeTab === 'manual' ? '2px solid var(--accent-purple)' : 'none',
-                  paddingBottom: '0.45rem',
-                  fontSize: '0.9rem'
-                }}
+                type="button" 
+                className="action-btn" 
+                onClick={() => setShowAddEmpModal(true)}
+                style={{ background: 'var(--grad-primary)', border: 'none', color: '#fff', padding: '0.65rem 1.25rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
               >
-                Manual Log
-              </button>
-              <button 
-                type="button"
-                onClick={() => { setActiveTab('excel'); setShowSuccessMsg(false); }} 
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  color: activeTab === 'excel' ? 'var(--accent-purple)' : 'var(--text-secondary)',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  borderBottom: activeTab === 'excel' ? '2px solid var(--accent-purple)' : 'none',
-                  paddingBottom: '0.45rem',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Excel Import
+                + Create Employee Account
               </button>
             </div>
 
-            {activeTab === 'manual' ? (
-              <>
-                <h3 className="panel-title">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 9V15M15 12H9M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Log New Shift Entry
-                </h3>
-                
-                <form id="addLogForm" className="input-form" onSubmit={handleAddLogSubmit}>
+            {/* Filters Row */}
+            <div className="filters-row" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              <input 
+                type="text" 
+                placeholder="Search by ID, name or role..."
+                className="form-input"
+                style={{ flexGrow: 1, maxWidth: '300px' }}
+                value={searchEmployeeQuery}
+                onChange={(e) => setSearchEmployeeQuery(e.target.value)}
+              />
+              <select 
+                className="form-input" 
+                style={{ maxWidth: '180px' }}
+                value={filterDept}
+                onChange={(e) => setFilterDept(e.target.value)}
+              >
+                <option value="">All Departments</option>
+                {['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations', 'Logistics'].map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+              <select 
+                className="form-input" 
+                style={{ maxWidth: '150px' }}
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+
+            {/* Employees Grid Table */}
+            <div className="table-responsive" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+                    <th style={{ padding: '0.75rem' }}>Employee</th>
+                    <th>ID</th>
+                    <th>Department</th>
+                    <th>Designation</th>
+                    <th>Salary</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No employees found.</td>
+                    </tr>
+                  ) : (
+                    filteredEmployees.map(emp => (
+                      <tr 
+                        key={emp._id} 
+                        onClick={() => handleEmployeeClick(emp)}
+                        className={`clickable-row ${selectedEmployee && selectedEmployee._id === emp._id ? 'active-row' : ''}`}
+                        style={{ 
+                          borderBottom: '1px solid var(--glass-border)', 
+                          cursor: 'pointer',
+                          backgroundColor: selectedEmployee && selectedEmployee._id === emp._id ? 'rgba(124, 58, 237, 0.05)' : 'transparent',
+                        }}
+                      >
+                        <td style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{ 
+                            width: '36px', 
+                            height: '36px', 
+                            borderRadius: '50%', 
+                            overflow: 'hidden', 
+                            background: 'var(--grad-primary)', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontWeight: '600'
+                          }}>
+                            {emp.profilePhoto ? (
+                              <img src={emp.profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              emp.fullName.charAt(0)
+                            )}
+                          </div>
+                          <span style={{ fontWeight: '500' }}>{emp.fullName}</span>
+                        </td>
+                        <td>{emp.employeeId}</td>
+                        <td>{emp.department}</td>
+                        <td>{emp.designation}</td>
+                        <td>{formatCurrency(emp.monthlySalary)}</td>
+                        <td>
+                          <span className={`status-pill ${emp.status.toLowerCase()}`} style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            backgroundColor: emp.status === 'Active' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(225, 29, 72, 0.1)',
+                            color: emp.status === 'Active' ? 'var(--accent-emerald)' : 'var(--accent-rose)'
+                          }}>{emp.status}</span>
+                        </td>
+                        <td>{new Date(emp.joiningDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Employee Detail Sidebar Drawer */}
+          {selectedEmployee && (
+            <aside className="employee-drawer glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'sticky', top: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="focus-badge">Employee Card</span>
+                <button type="button" onClick={() => setSelectedEmployee(null)} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>&times;</button>
+              </div>
+
+              {/* Profile Card Header */}
+              <div className="drawer-header" style={{ textAlign: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.25rem' }}>
+                <div style={{ 
+                  width: '80px', 
+                  height: '80px', 
+                  borderRadius: '24px', 
+                  overflow: 'hidden', 
+                  background: 'var(--grad-primary)', 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: '700',
+                  fontSize: '2rem',
+                  marginBottom: '0.75rem',
+                  boxShadow: 'var(--shadow-md)'
+                }}>
+                  {selectedEmployee.profilePhoto ? (
+                    <img src={selectedEmployee.profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    selectedEmployee.fullName.charAt(0)
+                  )}
+                </div>
+                <h3>{selectedEmployee.fullName}</h3>
+                <p style={{ color: 'var(--text-secondary)', fontWeight: '500', fontSize: '0.9rem' }}>{selectedEmployee.designation}</p>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.5rem' }}>
+                  <span className="detail-id" style={{ fontSize: '0.8rem', padding: '0.1rem 0.4rem' }}>{selectedEmployee.employeeId}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>|</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: '500', color: 'var(--accent-purple)' }}>{selectedEmployee.department}</span>
+                </div>
+              </div>
+
+              {/* Details Content */}
+              <div className="drawer-body" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto', maxHeight: 'calc(100vh - 400px)', paddingRight: '0.25rem' }}>
+                <div>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Employee Stats</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Joining Date</span>
+                      <p style={{ fontWeight: '600', fontSize: '0.85rem' }}>{new Date(selectedEmployee.joiningDate).toLocaleDateString('en-US')}</p>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Mobile</span>
+                      <p style={{ fontWeight: '600', fontSize: '0.85rem' }}>{selectedEmployee.mobileNumber}</p>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Salary Payout</span>
+                      <p style={{ fontWeight: '600', fontSize: '0.85rem', color: 'var(--accent-emerald)' }}>{formatCurrency(selectedEmployee.monthlySalary)}</p>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.02)', padding: '0.5rem', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Attendance Status</span>
+                      <p style={{ fontWeight: '600', fontSize: '0.85rem' }}>{employeeAttendanceCount.total} Shifts</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Shift Attendance Breakdown */}
+                <div>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Attendance Shifts Breakdown</h4>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {['A', 'B', 'C'].map(shift => (
+                      <div key={shift} style={{ flexGrow: 1, textAlign: 'center', background: 'rgba(0,0,0,0.01)', border: '1px solid var(--glass-border)', padding: '0.4rem', borderRadius: '6px' }}>
+                        <span style={{ fontWeight: '700', fontSize: '0.8rem' }}>Shift {shift}</span>
+                        <p style={{ fontWeight: '600', fontSize: '0.95rem' }}>{employeeAttendanceCount[shift] || 0}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Salary Payments history */}
+                <div>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Recent Payment History</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {employeeSalaryHistory.length === 0 ? (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No salary payouts logged yet.</p>
+                    ) : (
+                      employeeSalaryHistory.slice(0, 3).map(sal => (
+                        <div key={sal._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: 'rgba(0,0,0,0.01)', border: '1px solid var(--glass-border)', borderRadius: '6px', fontSize: '0.8rem' }}>
+                          <span><strong>{sal.month}</strong></span>
+                          <span>{formatCurrency(sal.netSalary)}</span>
+                          <span style={{ color: sal.paymentStatus === 'Paid' ? 'var(--accent-emerald)' : 'var(--accent-rose)', fontWeight: '600' }}>{sal.paymentStatus}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Administrative Notes */}
+                <div>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Administrative Notes (Internal)</h4>
+                  <textarea 
+                    defaultValue={selectedEmployee.companyNotes}
+                    onBlur={(e) => handleUpdateNotes(e.target.value)}
+                    placeholder="Add internal notes about performance, notes, policy details..."
+                    style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', resize: 'vertical' }}
+                    rows="3"
+                  ></textarea>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>*Auto-saves when you click outside.</span>
+                </div>
+              </div>
+              
+              <button 
+                type="button"
+                className="action-btn"
+                onClick={() => {
+                  setPrimaryTab('chats');
+                  setActiveThreadId(selectedEmployee._id);
+                }}
+                style={{ width: '100%', background: 'none', border: '1px solid var(--accent-purple)', color: 'var(--accent-purple)', padding: '0.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                💬 Open Confidential Chat
+              </button>
+            </aside>
+          )}
+
+          {/* Create Employee Account Modal */}
+          {showAddEmpModal && (
+            <div className="modal-backdrop" style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+            }}>
+              <div className="glass-panel modal-card" style={{
+                background: '#fff', width: '90%', maxWidth: '600px', borderRadius: '16px',
+                padding: '2rem', boxShadow: 'var(--shadow-lg)', maxHeight: '90vh', overflowY: 'auto'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3>Create Employee Account</h3>
+                  <button type="button" onClick={() => setShowAddEmpModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+                </div>
+
+                <form onSubmit={handleAddEmployeeSubmit} className="input-form">
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label htmlFor="addDate">Date Logged</label>
-                      <input 
-                        type="date" 
-                        id="addDate" 
-                        className="form-input" 
-                        value={formDate}
-                        onChange={(e) => setFormDate(e.target.value)}
-                        required 
-                      />
+                      <label>Full Name *</label>
+                      <input type="text" className="form-input" required value={empFullName} onChange={(e) => setEmpFullName(e.target.value)} />
                     </div>
                     <div className="form-group">
-                      <label htmlFor="addShift">Duty Shift</label>
-                      <select 
-                        id="addShift" 
-                        className="form-input"
-                        value={formShift}
-                        onChange={(e) => setFormShift(e.target.value)}
-                        required
-                      >
-                        <option value="A">Shift A (Morning)</option>
-                        <option value="B">Shift B (Evening)</option>
-                        <option value="C">Shift C (Night)</option>
+                      <label>Mobile Number *</label>
+                      <input type="text" className="form-input" required value={empMobileNumber} onChange={(e) => setEmpMobileNumber(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Email Address</label>
+                      <input type="email" className="form-input" value={empEmail} onChange={(e) => setEmpEmail(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Joining Date *</label>
+                      <input type="date" className="form-input" required value={empJoiningDate} onChange={(e) => setEmpJoiningDate(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Department *</label>
+                      <select className="form-input" value={empDepartment} onChange={(e) => setEmpDepartment(e.target.value)}>
+                        {['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations', 'Logistics'].map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Designation *</label>
+                      <select className="form-input" value={empDesignation} onChange={(e) => setEmpDesignation(e.target.value)}>
+                        {['Software Engineer', 'Senior Engineer', 'Manager', 'Analyst', 'HR Specialist', 'Logistics Lead', 'Coordinator'].map(des => (
+                          <option key={des} value={des}>{des}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
 
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label htmlFor="addName">Employee Name</label>
-                      <input 
-                        type="text" 
-                        id="addName" 
-                        className="form-input" 
-                        placeholder="e.g. Arjun"
-                        value={formName}
-                        onChange={(e) => setFormName(e.target.value)}
-                        required 
-                      />
+                      <label>Monthly Base Salary (INR) *</label>
+                      <input type="number" className="form-input" required value={empMonthlySalary} onChange={(e) => setEmpMonthlySalary(e.target.value)} />
                     </div>
                     <div className="form-group">
-                      <label htmlFor="addId">Staff Reference ID</label>
-                      <input 
-                        type="text" 
-                        id="addId" 
-                        className="form-input" 
-                        placeholder="e.g. C301"
-                        value={formId}
-                        onChange={(e) => setFormId(e.target.value)}
-                        required 
-                      />
+                      <label>Portal Login Password *</label>
+                      <input type="password" placeholder="Define temporary password" className="form-input" required value={empPassword} onChange={(e) => setEmpPassword(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Profile Picture</label>
+                      <input type="file" accept="image/*" className="form-input" onChange={handleProfilePhotoChange} />
+                    </div>
+                    <div className="form-group">
+                      <label>Employment Status</label>
+                      <select className="form-input" value={empStatus} onChange={(e) => setEmpStatus(e.target.value)}>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="addDescription">Work & Duty Description</label>
-                    <textarea 
-                      id="addDescription" 
-                      className="form-input" 
-                      rows="4" 
-                      placeholder="Describe the duties, servicing or inspections performed during this shift..."
-                      value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
-                      required
-                    ></textarea>
+                    <label>Initial Administration Notes</label>
+                    <textarea className="form-input" value={empCompanyNotes} onChange={(e) => setEmpCompanyNotes(e.target.value)} rows="2"></textarea>
                   </div>
 
-                  <button type="submit" className="action-btn form-submit-btn">Submit Shift Log</button>
-                  {showSuccessMsg && (
-                    <div id="addSuccessMsg" className="success-message" style={{ display: 'block' }}>
-                      Log successfully registered!
+                  <button type="submit" className="action-btn" style={{ width: '100%', background: 'var(--grad-primary)', border: 'none', color: '#fff', padding: '0.75rem', borderRadius: '8px', fontWeight: '600', marginTop: '1rem', cursor: 'pointer' }}>
+                    Generate Account & ID
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* Salary & Payroll Tab */}
+      {primaryTab === 'salary' && (
+        <div className="salary-tab-container" style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: '2rem' }}>
+          
+          {/* Column 1: Record Salary Form */}
+          <div className="salary-form-card glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', height: 'fit-content' }}>
+            <h3 className="panel-title">💰 Log Salary Payout</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>Record monthly compensation details for staff roster</p>
+
+            <form onSubmit={handleAddSalarySubmit} className="input-form">
+              <div className="form-group">
+                <label>Select Employee *</label>
+                <select 
+                  className="form-input"
+                  required
+                  value={salEmployeeId}
+                  onChange={(e) => {
+                    setSalEmployeeId(e.target.value);
+                    const selected = employees.find(emp => emp._id === e.target.value);
+                    if (selected) setSalBase(selected.monthlySalary);
+                  }}
+                >
+                  <option value="">Choose Employee...</option>
+                  {employees.map(emp => (
+                    <option key={emp._id} value={emp._id}>{emp.fullName} ({emp.employeeId})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>Pay Month *</label>
+                  <input type="month" className="form-input" required value={salMonth} onChange={(e) => setSalMonth(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Base Salary (INR) *</label>
+                  <input type="number" className="form-input" required value={salBase} onChange={(e) => setSalBase(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>Bonus (INR)</label>
+                  <input type="number" className="form-input" value={salBonus} onChange={(e) => setSalBonus(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Deductions (INR)</label>
+                  <input type="number" className="form-input" value={salDeductions} onChange={(e) => setSalDeductions(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Payment Status</label>
+                <select className="form-input" value={salStatus} onChange={(e) => setSalStatus(e.target.value)}>
+                  <option value="Unpaid">Unpaid / Processing</option>
+                  <option value="Paid">Paid / Settled</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Remarks / Notes</label>
+                <input type="text" className="form-input" placeholder="e.g. Performance bonus included" value={salRemarks} onChange={(e) => setSalRemarks(e.target.value)} />
+              </div>
+
+              <button type="submit" className="action-btn" style={{ width: '100%', background: 'var(--grad-primary)', border: 'none', color: '#fff', padding: '0.65rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
+                Publish Payslip Record
+              </button>
+            </form>
+          </div>
+
+          {/* Column 2: Payroll reports and list */}
+          <div className="salary-data-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            
+            {/* Header / Month Filter */}
+            <div className="glass-panel" style={{ padding: '1rem 1.5rem', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Payroll Summary Reports</h3>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Select Report Month:</span>
+                <input 
+                  type="month" 
+                  className="form-input" 
+                  value={salaryMonth} 
+                  onChange={(e) => setSalaryMonth(e.target.value)} 
+                  style={{ width: '180px', margin: 0 }}
+                />
+              </div>
+            </div>
+
+            {/* Quick Stats Ribbon */}
+            <div className="metrics-ribbon" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div className="metric-box glass-panel" style={{ borderLeft: '4px solid var(--accent-purple)' }}>
+                <span className="lbl">Total Payroll Cost</span>
+                <span className="val" style={{ color: 'var(--accent-purple)' }}>{formatCurrency(salaryReport.totalPayroll)}</span>
+              </div>
+              <div className="metric-box glass-panel" style={{ borderLeft: '4px solid var(--accent-emerald)' }}>
+                <span className="lbl">Settled Payouts</span>
+                <span className="val" style={{ color: 'var(--accent-emerald)' }}>{formatCurrency(salaryReport.totalPaid)}</span>
+              </div>
+              <div className="metric-box glass-panel" style={{ borderLeft: '4px solid var(--accent-rose)' }}>
+                <span className="lbl">Outstanding Unpaid</span>
+                <span className="val" style={{ color: 'var(--accent-rose)' }}>{formatCurrency(salaryReport.totalUnpaid)}</span>
+              </div>
+            </div>
+
+            {/* Main Payouts Table */}
+            <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px' }}>
+              <h4 style={{ marginBottom: '1rem' }}>Salary Registers ({salaryReport.records.length} items)</h4>
+              
+              <div className="table-responsive">
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--glass-border)', paddingBottom: '0.5rem' }}>
+                      <th style={{ padding: '0.5rem' }}>Staff Name</th>
+                      <th>Ref ID</th>
+                      <th>Department</th>
+                      <th>Base Pay</th>
+                      <th>Bonus/Deductions</th>
+                      <th>Net Payout</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salaryReport.records.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No salary records logged for {salaryMonth}.</td>
+                      </tr>
+                    ) : (
+                      salaryReport.records.map(rec => (
+                        <tr key={rec._id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                          <td style={{ padding: '0.65rem 0.5rem', fontWeight: '500' }}>{rec.employee?.fullName || 'Removed staff'}</td>
+                          <td>{rec.employee?.employeeId || 'N/A'}</td>
+                          <td>{rec.employee?.department || 'N/A'}</td>
+                          <td>{formatCurrency(rec.baseSalary)}</td>
+                          <td style={{ color: rec.bonus > 0 ? 'var(--accent-emerald)' : 'inherit' }}>
+                            {rec.bonus > 0 ? `+${formatCurrency(rec.bonus)}` : ''}
+                            {rec.deductions > 0 ? ` -${formatCurrency(rec.deductions)}` : ''}
+                            {rec.bonus === 0 && rec.deductions === 0 ? 'None' : ''}
+                          </td>
+                          <td style={{ fontWeight: '700' }}>{formatCurrency(rec.netSalary)}</td>
+                          <td>
+                            <span style={{
+                              padding: '0.2rem 0.4rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              backgroundColor: rec.paymentStatus === 'Paid' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(225, 29, 72, 0.1)',
+                              color: rec.paymentStatus === 'Paid' ? 'var(--accent-emerald)' : 'var(--accent-rose)'
+                            }}>{rec.paymentStatus}</span>
+                          </td>
+                          <td>
+                            {rec.paymentStatus === 'Unpaid' ? (
+                              <button 
+                                type="button" 
+                                className="action-btn"
+                                onClick={() => handleMarkSalaryPaid(rec._id)}
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'var(--grad-emerald)', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}
+                              >
+                                Mark Paid
+                              </button>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Paid ({new Date(rec.paymentDate).toLocaleDateString()})</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* Bulletins / Announcements Tab */}
+      {primaryTab === 'announcements' && (
+        <div className="announcements-tab-container" style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '2rem' }}>
+          
+          {/* Column 1: Publish Announcement Form */}
+          <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', height: 'fit-content' }}>
+            <h3 className="panel-title">📢 Broadcast Bulletin</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>Publish company announcements and department updates</p>
+
+            <form onSubmit={handleAddAnnouncementSubmit} className="input-form">
+              <div className="form-group">
+                <label>Announcement Title *</label>
+                <input type="text" className="form-input" required value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} placeholder="e.g. Office Holiday Notice" />
+              </div>
+
+              <div className="form-group">
+                <label>Target Audience Scope</label>
+                <select className="form-input" value={annTarget} onChange={(e) => setAnnTarget(e.target.value)}>
+                  <option value="All">Broadcast to All Employees</option>
+                  <option value="Department">Target Specific Department</option>
+                </select>
+              </div>
+
+              {annTarget === 'Department' && (
+                <div className="form-group">
+                  <label>Select Target Department</label>
+                  <select className="form-input" value={annDept} onChange={(e) => setAnnDept(e.target.value)}>
+                    {['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations', 'Logistics'].map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Bulletin Description *</label>
+                <textarea className="form-input" required value={annContent} onChange={(e) => setAnnContent(e.target.value)} rows="5" placeholder="Write bulletin details here..."></textarea>
+              </div>
+
+              <button type="submit" className="action-btn" style={{ width: '100%', background: 'var(--grad-primary)', border: 'none', color: '#fff', padding: '0.65rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
+                Publish Broadcast
+              </button>
+            </form>
+          </div>
+
+          {/* Column 2: Announcements List */}
+          <div className="announcements-list-container glass-panel" style={{ padding: '1.5rem', borderRadius: '16px' }}>
+            <h3>Recent Bulletins</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Active company broadcasts and memo feeds</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {announcements.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No announcements published yet.</p>
+              ) : (
+                announcements.map(ann => (
+                  <div key={ann._id} className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', borderLeft: '4px solid var(--accent-purple)', background: 'rgba(0,0,0,0.01)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                      <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{ann.title}</h4>
+                      <span className="detail-id" style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem' }}>
+                        Target: {ann.target === 'All' ? 'All Staff' : `Dept (${ann.department})`}
+                      </span>
                     </div>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{ann.content}</p>
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Published on {new Date(ann.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Confidential Chats Tab */}
+      {primaryTab === 'chats' && (
+        <div className="chats-tab-container glass-panel" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '1px', background: 'var(--glass-border)', padding: 0, borderRadius: '16px', overflow: 'hidden', height: 'calc(100vh - 250px)', minHeight: '500px' }}>
+          
+          {/* Left Panel: Conversations Thread list */}
+          <div className="chat-threads-sidebar" style={{ background: '#fff', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+            <div style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem' }}>Employee Channels</h3>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Private 1-to-1 secure query system</p>
+            </div>
+            <div className="threads-list" style={{ flexGrow: 1 }}>
+              {threads.length === 0 ? (
+                <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No active chat channels.</p>
+              ) : (
+                threads.map(thread => (
+                  <div 
+                    key={thread.employee._id}
+                    onClick={() => {
+                      setActiveThreadId(thread.employee._id);
+                      fetchChatMessages(thread.employee._id);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      padding: '0.75rem 1rem',
+                      borderBottom: '1px solid var(--glass-border)',
+                      cursor: 'pointer',
+                      background: activeThreadId === thread.employee._id ? 'rgba(124, 58, 237, 0.05)' : 'transparent',
+                      transition: 'background var(--transition-fast)'
+                    }}
+                  >
+                    <div style={{ 
+                      width: '36px', 
+                      height: '36px', 
+                      borderRadius: '50%', 
+                      background: 'var(--grad-primary)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: '600',
+                      flexShrink: 0
+                    }}>
+                      {thread.employee.fullName.charAt(0)}
+                    </div>
+                    <div style={{ flexGrow: 1, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: '600', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{thread.employee.fullName}</span>
+                        {thread.unreadCount > 0 && (
+                          <span style={{ background: 'var(--accent-rose)', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '0.1rem 0.35rem', borderRadius: '10px' }}>
+                            {thread.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {thread.lastMessage ? thread.lastMessage.content : 'No messages yet'}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Right Panel: Chat Thread Window */}
+          <div className="chat-window" style={{ background: '#f9fafb', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {activeThreadId ? (
+              <>
+                {/* Chat Header */}
+                <div className="chat-header" style={{ padding: '0.75rem 1.5rem', background: '#fff', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--grad-primary)', display: 'flex', alignItems: 'center', justify: 'center', color: '#fff', fontWeight: '600', justifyContent: 'center' }}>
+                    {employees.find(e => e._id === activeThreadId)?.fullName.charAt(0)}
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '0.9rem' }}>
+                      {employees.find(e => e._id === activeThreadId)?.fullName}
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {employees.find(e => e._id === activeThreadId)?.designation} | {employees.find(e => e._id === activeThreadId)?.employeeId}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Messages Body */}
+                <div className="chat-messages-body" style={{ flexGrow: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {chatMessages.length === 0 ? (
+                    <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <p style={{ fontSize: '1.5rem' }}>💬</p>
+                      <p style={{ fontSize: '0.85rem' }}>This is the beginning of your private secure chat channel.</p>
+                    </div>
+                  ) : (
+                    chatMessages.map(msg => {
+                      const isAdmin = msg.sender === 'admin';
+                      return (
+                        <div 
+                          key={msg._id} 
+                          style={{
+                            maxWidth: '70%',
+                            padding: '0.65rem 1rem',
+                            fontSize: '0.85rem',
+                            lineHeight: '1.4',
+                            alignSelf: isAdmin ? 'flex-end' : 'flex-start',
+                            background: isAdmin ? 'var(--grad-primary)' : '#fff',
+                            color: isAdmin ? '#fff' : 'var(--text-primary)',
+                            boxShadow: 'var(--shadow-sm)',
+                            border: isAdmin ? 'none' : '1px solid var(--glass-border)',
+                            borderRadius: isAdmin ? '12px 12px 0 12px' : '12px 12px 12px 0'
+                          }}
+                        >
+                          <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                          <span style={{ display: 'block', textAlign: 'right', fontSize: '0.65rem', marginTop: '0.25rem', opacity: 0.7 }}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })
                   )}
+                  <div ref={chatEndRef}></div>
+                </div>
+
+                {/* Chat Input form */}
+                <form onSubmit={handleSendChatMessage} style={{ padding: '1rem', background: '#fff', borderTop: '1px solid var(--glass-border)', display: 'flex', gap: '0.75rem' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Type private message to employee..." 
+                    className="form-input"
+                    style={{ margin: 0, flexGrow: 1 }}
+                    value={chatInputText}
+                    onChange={(e) => setChatInputText(e.target.value)}
+                  />
+                  <button type="submit" className="action-btn" style={{ margin: 0, background: 'var(--grad-primary)', border: 'none', color: '#fff', padding: '0 1.25rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
+                    Send
+                  </button>
                 </form>
               </>
             ) : (
-              // Excel Import tab contents
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <h3 className="panel-title" style={{ marginBottom: '0.25rem' }}>
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 10V16M12 16L9 13M12 16L15 13M17 21H7C5.89543 21 5 20.1046 5 19V5C5 3.89543 5.89543 3 7 3H12.5858C12.851 3 13.1054 3.10536 13.2929 3.29289L18.7071 8.70711C18.8946 8.89464 19 9.14901 19 9.41421V19C19 20.1046 18.1046 21 17 21Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Import Excel Roster
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                  Upload a spreadsheet sheet. The system will convert rows directly into JSON format and insert them into the logs collection.
-                </p>
-
-                {/* Dropzone area */}
-                <div 
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleDrop}
-                  style={{
-                    border: '2px dashed var(--glass-border)',
-                    borderRadius: '12px',
-                    padding: '2rem 1rem',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    background: 'rgba(0,0,0,0.01)',
-                    transition: 'border-color 0.2s',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.75rem'
-                  }}
-                  onClick={() => document.getElementById('excelFileInput').click()}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" style={{ width: '40px', height: '40px', color: 'var(--text-muted)' }}>
-                    <path d="M12 4V16M12 4L8 8M12 4L16 8M4 17V19C4 19.5304 4.21071 20.0391 4.58579 20.4142C4.96086 20.7893 5.46957 21 6 21H18C18.5304 21 19.0391 20.7893 19.4142 20.4142C19.7893 20.0391 20 19.5304 20 19V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <div>
-                    <p style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                      {excelFile ? excelFile : 'Drag & Drop Excel file here'}
-                    </p>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                      Supports .xlsx, .xls
-                    </p>
-                  </div>
-                  <button className="action-btn" type="button" style={{ fontSize: '0.75rem', padding: '0.35rem 0.85rem' }}>
-                    Choose File
-                  </button>
-                  <input 
-                    type="file" 
-                    id="excelFileInput" 
-                    accept=".xlsx, .xls" 
-                    style={{ display: 'none' }} 
-                    onChange={handleExcelUpload} 
-                  />
-                </div>
-
-                {/* Feedback Messages */}
-                {excelError && (
-                  <div style={{ 
-                    background: 'rgba(244, 63, 94, 0.06)', 
-                    border: '1px solid rgba(244, 63, 94, 0.15)', 
-                    color: 'var(--accent-rose)', 
-                    padding: '0.75rem', 
-                    borderRadius: '8px', 
-                    fontSize: '0.8rem',
-                    whiteSpace: 'pre-line',
-                    maxHeight: '120px',
-                    overflowY: 'auto'
-                  }}>
-                    {excelError}
-                  </div>
-                )}
-
-                {excelSuccessMsg && (
-                  <div className="success-message">
-                    {excelSuccessMsg}
-                  </div>
-                )}
-
-                {/* Import Confirmation Preview */}
-                {excelParsedData.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--accent-emerald)' }}>
-                        Parsed {excelParsedData.length} records successfully!
-                      </span>
-                    </div>
-                    
-                    {/* Small preview table */}
-                    <div style={{ 
-                      maxHeight: '150px', 
-                      overflowY: 'auto', 
-                      border: '1px solid var(--glass-border)', 
-                      borderRadius: '8px',
-                      background: 'rgba(0,0,0,0.015)'
-                    }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
-                            <th style={{ padding: '0.45rem' }}>Name</th>
-                            <th style={{ padding: '0.45rem' }}>ID</th>
-                            <th style={{ padding: '0.45rem' }}>Date</th>
-                            <th style={{ padding: '0.45rem' }}>Shift</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {excelParsedData.slice(0, 5).map((row, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>
-                              <td style={{ padding: '0.45rem' }}>{row.name}</td>
-                              <td style={{ padding: '0.45rem' }}>{row.id}</td>
-                              <td style={{ padding: '0.45rem' }}>{row.date}</td>
-                              <td style={{ padding: '0.45rem' }}>{row.shift}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {excelParsedData.length > 5 && (
-                        <div style={{ textAlign: 'center', padding: '0.25rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          And {excelParsedData.length - 5} more rows...
-                        </div>
-                      )}
-                    </div>
-
-                    <button 
-                      type="button" 
-                      className="action-btn form-submit-btn" 
-                      onClick={handleExcelImportSubmit}
-                      disabled={isImporting}
-                    >
-                      {isImporting ? 'Importing Roster...' : `Confirm Import (${excelParsedData.length} entries)`}
-                    </button>
-                  </div>
-                )}
-
+              <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <p style={{ fontSize: '3rem' }}>💬</p>
+                <h3>Private Secure Chat Workspace</h3>
+                <p style={{ fontSize: '0.9rem', maxWidth: '300px', margin: 'auto' }}>Select an active employee channel from the list on the left to start corresponding.</p>
               </div>
             )}
-
           </div>
-        </section>
 
-        {/* Column 2: Dashboard controls & Database Search */}
-        <div className="dashboard-controls-column">
-          {/* Search Panel */}
-          <section className="search-section glass-panel">
-            <div className="search-wrapper">
-              <svg className="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <input 
-                type="text" 
-                id="searchInput" 
-                placeholder="Search personnel by name..." 
-                autoComplete="off"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button 
-                  id="clearSearchBtn" 
-                  className="clear-btn" 
-                  aria-label="Clear search" 
-                  type="button" 
-                  style={{ display: 'flex' }}
-                  onClick={() => setSearchQuery('')}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              )}
-            </div>
-            <div className="search-quick-tags">
-              <span className="quick-tag-label">Quick Search:</span>
-              <div id="quickTagsContainer" className="quick-tags-list">
-                {quickTags.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className="quick-tag"
-                    onClick={() => handleTagClick(name)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Stats Overview */}
-          <section className="stats-grid">
-            <div className="stat-card glass-panel" id="statTotalPersonnel">
-              <div className="stat-header">
-                <span className="stat-title">Personnel Count</span>
-                <div className="stat-icon icon-blue">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div className="stat-value" id="valTotal">{totalCount}</div>
-              <div className="stat-footer">Across multiple shifts</div>
-            </div>
-
-            <div className="stat-card glass-panel" id="statActiveShifts">
-              <div className="stat-header">
-                <span className="stat-title">Shifts Logged</span>
-                <div className="stat-icon icon-purple">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div className="stat-value" id="valShifts">{loggedShifts}</div>
-              <div className="stat-footer">Rotational tracking</div>
-            </div>
-
-            <div className="stat-card glass-panel" id="statSearchStatus">
-              <div className="stat-header">
-                <span className="stat-title">Database Search</span>
-                <div className="stat-icon icon-cyan">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.709 16.9033 20.9739 14.8355 21.5839C12.7677 22.1939 10.5632 22.1168 8.54299 21.3639C6.52279 20.611 4.8003 19.2239 3.63673 17.408" stroke="currentColor" stroke-width="2" strokeLinecap="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div className="stat-value" id="valMatches">{matchCountLabel}</div>
-              <div className="stat-footer" id="valMatchesLabel">{matchFooterLabel}</div>
-            </div>
-          </section>
         </div>
-      </div>
-
-      {/* Details Focus Panel */}
-      {focusedLog && (
-        <section className="detail-focus-section" id="detailFocusSection" style={{ display: 'block' }}>
-          <div className="detail-focus-card glass-panel">
-            <span className="detail-focus-badge">Retrieved Profile</span>
-            
-            <div className="detail-profile-header">
-              <div className={`detail-avatar avatar-${focusedLog.shift.toLowerCase()}`}>
-                {focusedLog.name.charAt(0)}
-              </div>
-              <div className="detail-info">
-                <h3>{focusedLog.name}</h3>
-                <div className="detail-meta">
-                  <span className="detail-id">ID: {focusedLog.id}</span>
-                  <span className={`shift-badge badge-${focusedLog.shift.toLowerCase()}`}>
-                    Shift {focusedLog.shift} Roster
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="detail-grid">
-              <div className="detail-grid-item">
-                <span className="label">Date Logged</span>
-                <span className="val">{formatDate(focusedLog.date)}</span>
-              </div>
-              <div className="detail-grid-item">
-                <span className="label">Duty Shift Code</span>
-                <span className="val">Shift {focusedLog.shift} (Rotational)</span>
-              </div>
-              <div className="detail-grid-item">
-                <span className="label">Staff Reference</span>
-                <span className="val">REF-{focusedLog.id}-2026</span>
-              </div>
-            </div>
-
-            <div className="detail-description">
-              <h4>Task & Work Description Log</h4>
-              <p>{focusedLog.work_description}</p>
-            </div>
-          </div>
-        </section>
       )}
 
-      {/* Results Grid */}
-      <section className="results-section">
-        <h2 className="section-title" id="resultsTitle">
-          {searchQuery.trim() ? `Search Results (${filteredLogs.length})` : 'All Roster Logs'}
-        </h2>
-        
-        {filteredLogs.length > 0 ? (
-          <div className="log-grid" id="logGrid" style={{ display: 'grid' }}>
-            {filteredLogs.map((person) => {
-              const isExactMatch = searchQuery.trim().toLowerCase() === person.name.toLowerCase();
-              return (
-                <div 
-                  key={person._id} 
-                  className={`person-card glass-panel ${isExactMatch ? 'active-match' : ''}`}
-                  onClick={() => handleCardClick(person)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="card-top">
-                    <div className="person-identity">
-                      <div className={`avatar avatar-${person.shift.toLowerCase()}`}>
-                        {person.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="person-name">{person.name}</h3>
-                        <span className="person-id">{person.id}</span>
-                      </div>
-                    </div>
-                    <span className={`shift-badge badge-${person.shift.toLowerCase()}`}>
-                      Shift {person.shift}
-                    </span>
-                  </div>
-                  
-                  <div className="card-middle">
-                    <div className="log-date">
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M16 2V6M8 2V6M3 10H21" stroke="currentColor" stroke-width="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                      <span>{formatDate(person.date)}</span>
-                    </div>
-                    <p className="work-desc">{person.work_description}</p>
-                  </div>
-                  
-                  <div className="card-footer">
-                    <span>
-                      Focus Log Details
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* No Results Fallback */
-          <div className="no-results-panel glass-panel" id="noResultsPanel" style={{ display: 'flex' }}>
-            <div className="no-results-icon">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 16H14M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <h3>No matching personnel found</h3>
-            <p>We couldn't find anyone named <strong>{searchQuery}</strong>. Check spelling or add them as a new log entry.</p>
-            <button id="resetSearchBtn" className="action-btn" type="button" onClick={handleResetSearch}>
-              Reset Search
-            </button>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
