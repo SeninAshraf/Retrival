@@ -1744,7 +1744,7 @@ function AdminPortal({ token }) {
                 {/* Chat Header */}
                 <div className="chat-header" style={{ padding: '0.75rem 1.5rem', background: '#fff', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--grad-primary)', display: 'flex', alignItems: 'center', justify: 'center', color: '#fff', fontWeight: '600', justifyContent: 'center' }}>
-                    {employees.find(e => e._id === activeThreadId)?.fullName.charAt(0)}
+                    {employees.find(e => e._id === activeThreadId)?.fullName?.charAt(0) || ''}
                   </div>
                   <div>
                     <h4 style={{ margin: 0, fontSize: '0.9rem' }}>
