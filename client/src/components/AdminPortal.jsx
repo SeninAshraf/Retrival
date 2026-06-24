@@ -1007,14 +1007,14 @@ function AdminPortal({ token }) {
               </div>
 
               {/* Quick Tags List */}
-              <div className="quick-tags-section">
-                <span>Filter by Employee:</span>
-                <div id="quickTagsList" className="quick-tags-container">
+              <div className="search-quick-tags" style={{ marginTop: '1.25rem' }}>
+                <span className="quick-tag-label">Filter by Employee:</span>
+                <div id="quickTagsList" className="quick-tags-list">
                   {quickTags.map(name => (
                     <button 
                       key={name} 
                       type="button" 
-                      className={`tag-btn ${searchQuery === name ? 'active' : ''}`}
+                      className={`quick-tag ${searchQuery === name ? 'active' : ''}`}
                       onClick={() => handleTagClick(name)}
                     >
                       {name}
@@ -1181,11 +1181,11 @@ function AdminPortal({ token }) {
                           </div>
                           <span style={{ fontWeight: '500' }}>{emp.fullName}</span>
                         </td>
-                        <td>{emp.employeeId}</td>
-                        <td>{emp.department}</td>
-                        <td>{emp.designation}</td>
-                        <td>{formatCurrency(emp.monthlySalary)}</td>
-                        <td>
+                        <td data-label="ID">{emp.employeeId}</td>
+                        <td data-label="Department">{emp.department}</td>
+                        <td data-label="Designation">{emp.designation}</td>
+                        <td data-label="Salary">{formatCurrency(emp.monthlySalary)}</td>
+                        <td data-label="Status">
                           <span className={`status-pill ${(emp.status || 'Active').toLowerCase()}`} style={{
                             padding: '0.25rem 0.5rem',
                             borderRadius: '4px',
@@ -1195,7 +1195,7 @@ function AdminPortal({ token }) {
                             color: emp.status === 'Active' ? 'var(--accent-emerald)' : 'var(--accent-rose)'
                           }}>{emp.status || 'Active'}</span>
                         </td>
-                        <td>{new Date(emp.joiningDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}</td>
+                        <td data-label="Joined">{new Date(emp.joiningDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}</td>
                       </tr>
                     ))
                   )}
@@ -1559,16 +1559,16 @@ function AdminPortal({ token }) {
                       salaryReport.records.map(rec => (
                         <tr key={rec._id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                           <td style={{ padding: '0.65rem 0.5rem', fontWeight: '500' }}>{rec.employee?.fullName || 'Removed staff'}</td>
-                          <td>{rec.employee?.employeeId || 'N/A'}</td>
-                          <td>{rec.employee?.department || 'N/A'}</td>
-                          <td>{formatCurrency(rec.baseSalary)}</td>
-                          <td style={{ color: rec.bonus > 0 ? 'var(--accent-emerald)' : 'inherit' }}>
+                          <td data-label="Ref ID">{rec.employee?.employeeId || 'N/A'}</td>
+                          <td data-label="Department">{rec.employee?.department || 'N/A'}</td>
+                          <td data-label="Base Pay">{formatCurrency(rec.baseSalary)}</td>
+                          <td data-label="Bonus/Deductions" style={{ color: rec.bonus > 0 ? 'var(--accent-emerald)' : 'inherit' }}>
                             {rec.bonus > 0 ? `+${formatCurrency(rec.bonus)}` : ''}
                             {rec.deductions > 0 ? ` -${formatCurrency(rec.deductions)}` : ''}
                             {rec.bonus === 0 && rec.deductions === 0 ? 'None' : ''}
                           </td>
-                          <td style={{ fontWeight: '700' }}>{formatCurrency(rec.netSalary)}</td>
-                          <td>
+                          <td data-label="Net Payout" style={{ fontWeight: '700' }}>{formatCurrency(rec.netSalary)}</td>
+                          <td data-label="Status">
                             <span style={{
                               padding: '0.2rem 0.4rem',
                               borderRadius: '4px',
@@ -1578,7 +1578,7 @@ function AdminPortal({ token }) {
                               color: rec.paymentStatus === 'Paid' ? 'var(--accent-emerald)' : 'var(--accent-rose)'
                             }}>{rec.paymentStatus}</span>
                           </td>
-                          <td>
+                          <td data-label="Actions">
                             {rec.paymentStatus === 'Unpaid' ? (
                               <button 
                                 type="button" 
