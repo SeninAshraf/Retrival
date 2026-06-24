@@ -162,13 +162,31 @@ function AdminPortal({ token }) {
       const date = new Date(Math.round((val - 25569) * 86400 * 1000));
       return date.toISOString().split('T')[0];
     }
+    
+    const strVal = String(val).trim();
+    
+    // Try parsing DD/MM/YYYY or DD-MM-YYYY
+    const parts = strVal.split(/[-/]/);
+    if (parts.length === 3) {
+      if (parts[2].length === 4) {
+        // DD/MM/YYYY -> YYYY-MM-DD
+        const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      } else if (parts[0].length === 4) {
+        // YYYY/MM/DD -> YYYY-MM-DD
+        const d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      }
+    }
+
     try {
-      const d = new Date(val);
+      const d = new Date(strVal);
       if (!isNaN(d.getTime())) {
         return d.toISOString().split('T')[0];
       }
     } catch (e) {}
-    return String(val);
+
+    return '';
   };
 
   // Normalizes Excel Shift string values
